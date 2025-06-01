@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/coordinator"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Top AppBar -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorPrimaryContainer"
+            android:title="Settings"
+            android:titleTextColor="?attr/colorOnPrimaryContainer"
+            app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel"
+            app:popupTheme="@style/ThemeOverlay.Material3.Light" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Scrollable settings content -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/nested_scroll_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp"
+        app:layout_behavior="com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:divider="?android:attr/dividerHorizontal"
+            android:showDividers="middle"
+            android:dividerPadding="8dp">
+
+            <!-- API Key Input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="OpenAI API Key"
+                style="@style/Widget.Material3.TextInputLayout.FilledBox.Dense">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etApiKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:importantForAutofill="yes" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Model Identifier -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Model Identifier (Default: gemini-2.5-flash-preview-04-17)"
+                style="@style/Widget.Material3.TextInputLayout.FilledBox.Dense">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etModelIdentifier"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Temperature Configuration -->
+            <TextView
+                android:id="@+id/tvTemperatureValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Temperature: 0.5"
+                android:textAlignment="center"
+                android:textColor="?attr/colorOnSurface"
+                android:layout_marginTop="8dp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderTemperature"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:value="0.5"
+                android:valueFrom="0.0"
+                android:valueTo="1.0"
+                android:stepSize="0.1" />
+
+            <!-- Max Output Tokens -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Max Output Tokens (Default: 8192)"
+                style="@style/Widget.Material3.TextInputLayout.FilledBox.Dense">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etMaxOutputTokens"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Save Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveApiKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Save Configuration"
+                app:icon="@android:drawable/ic_menu_save"
+                app:iconPadding="8dp"
+                app:iconGravity="textStart" />
+
+            <!-- Dark Mode Switch -->
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchDarkMode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Enable Dark Mode"
+                android:checked="false"
+                android:layout_marginTop="24dp" />
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
