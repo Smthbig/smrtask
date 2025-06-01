@@ -4,12 +4,14 @@
     android:id="@+id/scrollView"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp">
+    android:padding="24dp"
+    android:background="?android:attr/windowBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
 
         <!-- Title -->
         <TextView
@@ -18,7 +20,8 @@
             android:layout_height="wrap_content"
             android:text="Setup Your Smrtask"
             android:textAppearance="?attr/textAppearanceHeadlineSmall"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="24dp"
+            android:textAlignment="center" />
 
         <!-- API Key Input -->
         <com.google.android.material.textfield.TextInputLayout
@@ -26,16 +29,30 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Enter API Key"
-            app:endIconMode="password_toggle"
-            android:layout_marginBottom="16dp">
+            app:boxStrokeColor="?attr/colorPrimary"
+            app:boxBackgroundMode="outline"
+            android:layout_marginBottom="4dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etApiKey"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textPassword"
-                android:importantForAutofill="yes" />
+                android:importantForAutofill="yes"
+                android:autofillHints="password"
+                android:singleLine="true" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Custom toggle visibility button below API field -->
+        <ImageButton
+            android:id="@+id/btnToggleApiKeyVisibility"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_menu_view"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Toggle Password Visibility"
+            android:tint="?attr/colorPrimary"
+            android:layout_marginBottom="16dp" />
 
         <!-- Interests Input -->
         <com.google.android.material.textfield.TextInputLayout
@@ -43,14 +60,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Enter Your Interests"
+            app:boxBackgroundMode="outline"
+            app:boxStrokeColor="?attr/colorPrimary"
             android:layout_marginBottom="24dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etInterests"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="text"
-                android:maxLines="3" />
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="4"
+                android:minLines="2"
+                android:importantForAutofill="yes"
+                android:autofillHints="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Save Button -->
@@ -58,7 +80,10 @@
             android:id="@+id/btnSave"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Save Setup" />
+            android:text="Save Setup"
+            app:cornerRadius="16dp"
+            android:backgroundTint="?attr/colorPrimary"
+            android:textColor="?android:attr/textColorPrimaryInverse" />
 
     </LinearLayout>
 

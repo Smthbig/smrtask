@@ -15,28 +15,48 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import com.smrtask.databinding.ActivitySetupBinding
 
+/**
+ * Kotlin version of SetupActivity for initial user setup.
+ * Handles API key input, interest preferences, theme, and permissions.
+ * Applies modern Kotlin idioms and lifecycle-aware permission handling.
+ */
 class SetupActivity : AppCompatActivity() {
+
     private lateinit var binding: ActivitySetupBinding
     private lateinit var sharedPreferences: SharedPreferences
 
+    // Permission launcher for runtime permission requests
+    private val requestPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (!allGranted) {
+            Toast.makeText(this, "Permissions required for full functionality", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        applySavedTheme() // Apply theme before UI setup
+        applySavedTheme()
         super.onCreate(savedInstanceState)
         binding = ActivitySetupBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         sharedPreferences = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
 
-        // Hide API Key input by default (password style)
+        // Mask API Key input by default
         binding.etApiKey.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
 
-        // Pre-fill existing data if any
+        // Restore existing data
         binding.etApiKey.setText(sharedPreferences.getString("api_key", ""))
         binding.etInterests.setText(sharedPreferences.getString("user_interests", ""))
 
-        // Request necessary permissions
+        // Show/hide API key toggle
+        binding.btnToggleApiKeyVisibility.setOnClickListener { toggleApiKeyVisibility() }
+
+        // Request permissions on load
         checkPermissions()
 
+        // Save and continue
         binding.btnSave.setOnClickListener {
             val apiKey = binding.etApiKey.text.toString().trim()
             val interests = binding.etInterests.text.toString().trim()
@@ -58,15 +78,37 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Toggle visibility of API key input.
+     */
+    private fun toggleApiKeyVisibility() {
+        val isPasswordHidden = binding.etApiKey.inputType and InputType.TYPE_TEXT_VARIATION_PASSWORD == InputType.TYPE_TEXT_VARIATION_PASSWORD
+
+        if (isPasswordHidden) {
+            binding.etApiKey.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            binding.btnToggleApiKeyVisibility.setImageResource(android.R.drawable.ic_menu_view)
+        } else {
+            binding.etApiKey.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            binding.btnToggleApiKeyVisibility.setImageResource(android.R.drawable.ic_secure)
+        }
+
+        binding.etApiKey.setSelection(binding.etApiKey.text?.length ?: 0)
+    }
+
+    /**
+     * Apply dark or light theme based on saved preference.
+     */
     private fun applySavedTheme() {
-        val prefs = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
-        val isDarkMode = prefs.getBoolean("dark_mode", false)
+        val isDarkMode = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
+            .getBoolean("dark_mode", false)
         AppCompatDelegate.setDefaultNightMode(
-            if (isDarkMode) AppCompatDelegate.MODE_NIGHT_YES 
-            else AppCompatDelegate.MODE_NIGHT_NO
+            if (isDarkMode) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         )
     }
 
+    /**
+     * Save API key and interests securely.
+     */
     private fun saveSetupData(apiKey: String, interests: String) {
         sharedPreferences.edit().apply {
             putString("api_key", apiKey)
@@ -75,42 +117,37 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Request required permissions based on Android version.
+     */
     private fun checkPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // For Android 13+
-            requestPermissionsLauncher.launch(arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO,
-                Manifest.permission.READ_MEDIA_AUDIO
-            ))
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // For Android 6 to 12
-            if (!hasStoragePermission()) {
-                requestPermissionsLauncher.launch(arrayOf(
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-                ))
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                requestPermissionsLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_MEDIA_IMAGES,
+                        Manifest.permission.READ_MEDIA_VIDEO,
+                        Manifest.permission.READ_MEDIA_AUDIO
+                    )
+                )
+            }
+
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !hasStoragePermission() -> {
+                requestPermissionsLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    )
+                )
             }
         }
     }
 
-    private val requestPermissionsLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val deniedPermissions = permissions.filter { !it.value }.keys
-        if (deniedPermissions.isNotEmpty()) {
-            Toast.makeText(this, "Permissions required for full functionality", Toast.LENGTH_LONG).show()
-        }
-    }
-
+    /**
+     * Check if legacy storage permissions are granted.
+     */
     private fun hasStoragePermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED && 
-        ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
     }
 }

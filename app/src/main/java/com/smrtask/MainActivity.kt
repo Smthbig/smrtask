@@ -44,6 +44,14 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme() // Apply theme before super.onCreate to avoid flicker
         super.onCreate(savedInstanceState)
+
+        // 🚀 Check if API key is missing and redirect to SetupActivity
+        if (isFirstTimeSetupRequired()) {
+            startActivity(Intent(this, SetupActivity::class.java))
+            finish()
+            return
+        }
+
         setContentView(R.layout.activity_main)
 
         setupViews()
@@ -61,11 +69,20 @@ class MainActivity : AppCompatActivity() {
      * Applies saved dark mode setting using SharedPreferences
      */
     private fun applySavedTheme() {
-        val isDarkMode = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
-            .getBoolean("dark_mode", false)
+        val prefs = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
+        val isDarkMode = prefs.getBoolean("dark_mode", false)
         AppCompatDelegate.setDefaultNightMode(
             if (isDarkMode) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         )
+    }
+
+    /**
+     * Checks if API key is missing (first-time setup)
+     */
+    private fun isFirstTimeSetupRequired(): Boolean {
+        val prefs = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
+        val apiKey = prefs.getString("api_key", null)
+        return apiKey.isNullOrBlank()
     }
 
     /**
@@ -84,14 +101,11 @@ class MainActivity : AppCompatActivity() {
         btnSettings.setOnClickListener { openSettings() }
         btnSavePdf.setOnClickListener { exportChatToPdf() }
 
-        // Allow sending question by IME action (keyboard send button)
         etQuestion.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
                 btnSend.performClick()
                 true
-            } else {
-                false
-            }
+            } else false
         }
     }
 
@@ -99,7 +113,7 @@ class MainActivity : AppCompatActivity() {
      * Configures the WebView to properly display HTML responses
      */
     private fun setupWebView() {
-        webViewResponse.webViewClient = WebViewClient() // Ensures links open inside WebView
+        webViewResponse.webViewClient = WebViewClient()
         webViewResponse.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -108,23 +122,20 @@ class MainActivity : AppCompatActivity() {
             builtInZoomControls = true
             displayZoomControls = false
         }
-        webViewResponse.setLayerType(View.LAYER_TYPE_HARDWARE, null) // GPU acceleration for smoother rendering
+        webViewResponse.setLayerType(View.LAYER_TYPE_HARDWARE, null)
     }
 
     /**
      * Initializes GeminiHelper with error and UI callback handlers
      */
     private fun setupGeminiHelper() {
-    geminiHelper = GeminiHelper(
-        context = this,
-        errorHandler = { errorMessage -> showError(errorMessage) },
-        uiCallback = { runnable -> runOnUiThread(runnable) }
-     )
+        geminiHelper = GeminiHelper(
+            context = this,
+            errorHandler = { errorMessage -> showError(errorMessage) },
+            uiCallback = { runnable -> runOnUiThread(runnable) }
+        )
     }
-    /**
-     * Called when the Send button or keyboard send action is triggered
-     * Validates input and sends the question to GeminiHelper
-     */
+
     private fun onSendClicked() {
         val question = etQuestion.text?.toString()?.trim().orEmpty()
         if (question.isEmpty()) {
@@ -135,10 +146,6 @@ class MainActivity : AppCompatActivity() {
         sendQuestionToGemini(question)
     }
 
-    /**
-     * Sends the user's question to GeminiHelper and handles the asynchronous response
-     * Shows loading indicator during network call and updates UI with response
-     */
     private fun sendQuestionToGemini(question: String) {
         showLoading(true)
         geminiHelper.sendUserMessage(question) { responseText ->
@@ -147,7 +154,6 @@ class MainActivity : AppCompatActivity() {
                 if (responseText.isNullOrBlank()) {
                     showError("Empty response received.")
                 } else {
-                    // Save response HTML and display it
                     viewModel.responseHtml.value = responseText
                     displayResponse(responseText)
                 }
@@ -155,9 +161,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Toggles loading UI state to provide feedback to user
-     */
     private fun showLoading(isLoading: Boolean) {
         progressLoading.visibility = if (isLoading) View.VISIBLE else View.GONE
         btnSend.isEnabled = !isLoading
@@ -165,9 +168,6 @@ class MainActivity : AppCompatActivity() {
         btnSavePdf.isEnabled = !isLoading
     }
 
-    /**
-     * Displays error messages consistently in the UI thread
-     */
     private fun showError(message: String) {
         runOnUiThread {
             showLoading(false)
@@ -175,11 +175,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Formats and loads Gemini's HTML response content into the WebView with custom styling
-     */
     private fun displayResponse(htmlContent: String) {
-        // Full HTML page with embedded style to ensure consistent UI and readability
         val formattedHtml = """
             <html>
             <head>
@@ -227,14 +223,9 @@ class MainActivity : AppCompatActivity() {
 
         webViewResponse.loadDataWithBaseURL(null, formattedHtml, "text/html", "UTF-8", null)
         cardWebView.visibility = View.VISIBLE
-
-        // Scroll WebView down slightly after content loads for better UX
         webViewResponse.postDelayed({ webViewResponse.pageDown(true) }, 300)
     }
 
-    /**
-     * Shows a friendly welcome message if no chat history exists
-     */
     private fun displayWelcomeMessage() {
         displayResponse(
             "<h2>Welcome to Smrtask!</h2>" +
@@ -242,17 +233,10 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    /**
-     * Opens SettingsActivity for user preferences like API key and theme
-     */
     private fun openSettings() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
 
-    /**
-     * Exports current chat response as PDF using PdfHelper utility
-     * Opens the PDF if saved successfully
-     */
     private fun exportChatToPdf() {
         val htmlContent = viewModel.responseHtml.value
         if (htmlContent.isNullOrBlank()) {
@@ -260,7 +244,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Convert HTML content to plain text for PDF export to keep it clean
         val pdfPath = PdfHelper.exportToPdf(this, htmlContent)
 
         if (!pdfPath.isNullOrEmpty()) {
@@ -271,9 +254,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Opens a PDF file using external apps with secure URI permissions
-     */
     private fun openPdf(pdfPath: String) {
         try {
             val pdfFile = File(pdfPath)
@@ -288,7 +268,6 @@ class MainActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
-            // Verify that there's an app to handle the intent
             if (pdfIntent.resolveActivity(packageManager) != null) {
                 startActivity(pdfIntent)
             } else {
@@ -299,9 +278,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Utility function to show a short Toast message on UI thread
-     */
     private fun showToast(msg: String) {
         runOnUiThread {
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
