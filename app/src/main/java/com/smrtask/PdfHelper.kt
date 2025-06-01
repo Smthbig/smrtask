@@ -18,7 +18,7 @@ import java.util.Locale
 
 object PdfHelper {
 
-    // A4 size in points (1 point = 1/72 inch)
+    //  A4 size in points (1 point = 1/72 inch)
     private const val PAGE_WIDTH = 595
     private const val PAGE_HEIGHT = 842
     private const val MARGIN = 40f
