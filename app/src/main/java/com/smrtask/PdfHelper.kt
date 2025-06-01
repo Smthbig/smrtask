@@ -6,6 +6,7 @@ import android.graphics.pdf.PdfDocument
 import android.os.Environment
 import android.text.Html
 import android.text.Layout
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.widget.Toast
@@ -13,65 +14,80 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 
 object PdfHelper {
 
-    // Constants for page size (A4)
-    private const val PAGE_WIDTH = 595  // A4 width in points (8.3 inches at 72 points/inch)
-    private const val PAGE_HEIGHT = 842 // A4 height in points (11.7 inches at 72 points/inch)
+    // A4 size in points (1 point = 1/72 inch)
+    private const val PAGE_WIDTH = 595
+    private const val PAGE_HEIGHT = 842
     private const val MARGIN = 40f
     private const val FONT_SIZE = 14f
     private const val LINE_SPACING = 1.4f
-    private const val HEADER_TEXT = "Smrtask PDF Document"
     private const val HEADER_FONT_SIZE = 16f
     private const val FOOTER_FONT_SIZE = 12f
+    private const val HEADER_TEXT = "Smrtask PDF Document"
 
-    // Function to create PDF
+    /**
+     * Exports full HTML content to a PDF with basic formatting.
+     * Handles pagination and plain-to-styled conversion internally.
+     */
     fun exportToPdf(context: Context, htmlContent: String): String {
         return try {
             val document = PdfDocument()
+
             val paint = TextPaint().apply {
                 textSize = FONT_SIZE
                 isAntiAlias = true
                 color = Color.BLACK
-                typeface = Typeface.create("Segoe UI", Typeface.NORMAL)
+                typeface = Typeface.SANS_SERIF
             }
 
-            // Convert HTML to plain text
-            val plainText = cleanHtmlContent(htmlContent)
-            val lines = plainText.split("\n")
+            // Remove <style> tags to prevent raw CSS printing
+            val cleanedHtml = htmlContent.replace(
+                Regex("<style.*?>.*?</style>", RegexOption.DOT_MATCHES_ALL),
+                ""
+            )
+
+            // Use cleaned HTML content
+            val spanned: Spanned = Html.fromHtml(cleanedHtml, Html.FROM_HTML_MODE_LEGACY)
+
+            val contentWidth = (PAGE_WIDTH - MARGIN * 2).toInt()
+
+            val layout = StaticLayout.Builder
+                .obtain(spanned, 0, spanned.length, paint, contentWidth)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setLineSpacing(4f, LINE_SPACING)
+                .setIncludePad(false)
+                .build()
 
             var pageCount = 1
-            var currentPage = createNewPage(document, pageCount)
-            var canvas = currentPage.canvas
-            var y = drawHeader(canvas) + MARGIN
+            var startLine = 0
+            val totalLines = layout.lineCount
 
-            for (line in lines) {
-                val staticLayout = createStaticLayout(line, paint)
+            while (startLine < totalLines) {
+                val page = createNewPage(document, pageCount)
+                val canvas = page.canvas
 
-                // Check if text fits the current page
-                if (y + staticLayout.height > PAGE_HEIGHT - MARGIN * 2) {
-                    drawFooter(canvas, pageCount)
-                    document.finishPage(currentPage)
-                    pageCount++
-                    currentPage = createNewPage(document, pageCount)
-                    canvas = currentPage.canvas
-                    y = drawHeader(canvas) + MARGIN
-                }
+                val yStart = drawHeader(canvas) + MARGIN
 
-                // Draw the text
                 canvas.save()
-                canvas.translate(MARGIN, y)
-                staticLayout.draw(canvas)
+                canvas.translate(MARGIN, yStart)
+
+                val pageHeightAvailable = (PAGE_HEIGHT - (yStart + MARGIN + 40)).toInt()
+
+                val pageLayout = createPagedLayout(layout, paint, startLine, pageHeightAvailable)
+                pageLayout.draw(canvas)
+
                 canvas.restore()
-                y += staticLayout.height + LINE_SPACING * paint.textSize
+
+                drawFooter(canvas, pageCount)
+                document.finishPage(page)
+
+                startLine += pageLayout.lineCount
+                pageCount++
             }
 
-            // Draw footer on the last page
-            drawFooter(canvas, pageCount)
-            document.finishPage(currentPage)
-
-            // Save the document
             savePdfDocument(context, document)
         } catch (e: Exception) {
             Toast.makeText(context, "Error creating PDF: ${e.message}", Toast.LENGTH_LONG).show()
@@ -79,64 +95,90 @@ object PdfHelper {
         }
     }
 
-    // Function to clean HTML content to plain text
-    private fun cleanHtmlContent(htmlContent: String): String {
-        return try {
-            Html.fromHtml(htmlContent, Html.FROM_HTML_MODE_LEGACY).toString()
-                .replace(Regex("(?s)<style.*?</style>"), "") // Remove CSS
-                .replace(Regex("<[^>]*>"), "")               // Remove HTML tags
-                .trim()
-        } catch (e: Exception) {
-            "Failed to parse HTML content: ${e.message}"
-        }
-    }
-
-    // Function to create a new page
-    private fun createNewPage(document: PdfDocument, pageCount: Int): PdfDocument.Page {
-        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageCount).create()
+    /**
+     * Creates a new A4 page in the document
+     */
+    private fun createNewPage(document: PdfDocument, pageNumber: Int): PdfDocument.Page {
+        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
         return document.startPage(pageInfo)
     }
 
-    // Function to create StaticLayout (multi-line text)
-    private fun createStaticLayout(text: String, paint: TextPaint): StaticLayout {
-        return StaticLayout.Builder.obtain(text.trim(), 0, text.length, paint, (PAGE_WIDTH - MARGIN * 2).toInt())
+    /**
+     * Splits content layout into paged chunks starting from [startLine]
+     */
+    private fun createPagedLayout(
+        originalLayout: StaticLayout,
+        paint: TextPaint,
+        startLine: Int,
+        availableHeight: Int
+    ): StaticLayout {
+        val text = originalLayout.text
+        var endLine = startLine
+        var height = 0
+
+        while (endLine < originalLayout.lineCount) {
+            val top = originalLayout.getLineTop(startLine)
+            val bottom = originalLayout.getLineBottom(endLine)
+            val currentHeight = bottom - top
+
+            if (currentHeight > availableHeight) break
+
+            height = currentHeight
+            endLine++
+        }
+
+        val startOffset = originalLayout.getLineStart(startLine)
+        val endOffset = originalLayout.getLineEnd(endLine.coerceAtMost(originalLayout.lineCount - 1))
+        val contentWidth = (PAGE_WIDTH - MARGIN * 2).toInt()
+
+        return StaticLayout.Builder
+            .obtain(text, startOffset, endOffset, paint, contentWidth)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(4f, LINE_SPACING)
             .setIncludePad(false)
             .build()
     }
 
-    // Function to draw header (Title)
+    /**
+     * Draws a top header and returns the height used
+     */
     private fun drawHeader(canvas: Canvas): Float {
-        val headerPaint = Paint().apply {
+        val paint = Paint().apply {
             textSize = HEADER_FONT_SIZE
-            isAntiAlias = true
             color = Color.DKGRAY
+            isAntiAlias = true
             typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText(HEADER_TEXT, PAGE_WIDTH / 2f, MARGIN, headerPaint)
+        canvas.drawText(HEADER_TEXT, PAGE_WIDTH / 2f, MARGIN, paint)
         return MARGIN + HEADER_FONT_SIZE + 10f
     }
 
-    // Function to draw footer (Page Number)
+    /**
+     * Draws a page footer
+     */
     private fun drawFooter(canvas: Canvas, pageNumber: Int) {
-        val footerPaint = Paint().apply {
+        val paint = Paint().apply {
             textSize = FOOTER_FONT_SIZE
+            color = Color.GRAY
             isAntiAlias = true
-            color = Color.DKGRAY
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("Page $pageNumber", PAGE_WIDTH / 2f, PAGE_HEIGHT - 20f, footerPaint)
+        canvas.drawText("Page $pageNumber", PAGE_WIDTH / 2f, PAGE_HEIGHT - 20f, paint)
     }
 
-    // Function to save the PDF document
+    /**
+     * Saves the generated PDF to Documents/Smrtask/
+     */
     private fun savePdfDocument(context: Context, document: PdfDocument): String {
-        val fileName = "Smrtask_${SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())}.pdf"
-        val fileDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "Smrtask")
-        if (!fileDir.exists()) fileDir.mkdirs()
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val fileName = "Smrtask_$timestamp.pdf"
+        val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        val smrtaskDir = File(documentsDir, "Smrtask").apply {
+            if (!exists()) mkdirs()
+        }
 
-        val file = File(fileDir, fileName)
+        val file = File(smrtaskDir, fileName)
         return try {
             FileOutputStream(file).use { document.writeTo(it) }
             document.close()

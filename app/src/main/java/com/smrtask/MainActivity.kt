@@ -3,6 +3,7 @@ package com.smrtask
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.text.Html
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.webkit.WebSettings
@@ -19,8 +20,13 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.TextInputEditText
 import java.io.File
 
+/**
+ * MainActivity: Core UI for Smrtask app.
+ * Handles question input, Gemini interaction, and result rendering with PDF export and theming.
+ */
 class MainActivity : AppCompatActivity() {
 
+    // UI elements
     private lateinit var etQuestion: TextInputEditText
     private lateinit var btnSend: MaterialButton
     private lateinit var btnSettings: MaterialButton
@@ -28,12 +34,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webViewResponse: WebView
     private lateinit var cardWebView: MaterialCardView
     private lateinit var progressLoading: ProgressBar
+
+    // Gemini helper to interact with AI model
     private lateinit var geminiHelper: GeminiHelper
 
+    // ViewModel to preserve UI state across configuration changes
     private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        applySavedTheme()
+        applySavedTheme() // Apply theme before super.onCreate to avoid flicker
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -41,20 +50,27 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         setupGeminiHelper()
 
+        // Restore previous UI state from ViewModel
         viewModel.responseHtml.value?.let { displayResponse(it) }
         viewModel.lastInput.value?.let { etQuestion.setText(it) }
 
         if (viewModel.chatHistory.isEmpty()) displayWelcomeMessage()
     }
 
+    /**
+     * Applies saved dark mode setting using SharedPreferences
+     */
     private fun applySavedTheme() {
-        val prefs = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
-        val isDarkMode = prefs.getBoolean("dark_mode", false)
+        val isDarkMode = getSharedPreferences("smrtask_prefs", Context.MODE_PRIVATE)
+            .getBoolean("dark_mode", false)
         AppCompatDelegate.setDefaultNightMode(
             if (isDarkMode) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         )
     }
 
+    /**
+     * Finds and sets up all view references and listeners
+     */
     private fun setupViews() {
         etQuestion = findViewById(R.id.etQuestion)
         btnSend = findViewById(R.id.btnSend)
@@ -68,40 +84,50 @@ class MainActivity : AppCompatActivity() {
         btnSettings.setOnClickListener { openSettings() }
         btnSavePdf.setOnClickListener { exportChatToPdf() }
 
+        // Allow sending question by IME action (keyboard send button)
         etQuestion.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
                 btnSend.performClick()
                 true
-            } else false
-        }
-    }
-
-    private fun setupWebView() {
-        webViewResponse.apply {
-            webViewClient = WebViewClient()
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                cacheMode = WebSettings.LOAD_NO_CACHE
-                setSupportZoom(true)
-                builtInZoomControls = true
-                displayZoomControls = false
-                setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+            } else {
+                false
             }
         }
     }
 
-    private fun setupGeminiHelper() {
-        geminiHelper = GeminiHelper(
-            context = this,
-            errorHandler = { showError(it) },
-            uiCallback = { block -> runOnUiThread(block) }
-        )
+    /**
+     * Configures the WebView to properly display HTML responses
+     */
+    private fun setupWebView() {
+        webViewResponse.webViewClient = WebViewClient() // Ensures links open inside WebView
+        webViewResponse.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            cacheMode = WebSettings.LOAD_NO_CACHE
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
+        }
+        webViewResponse.setLayerType(View.LAYER_TYPE_HARDWARE, null) // GPU acceleration for smoother rendering
     }
 
+    /**
+     * Initializes GeminiHelper with error and UI callback handlers
+     */
+    private fun setupGeminiHelper() {
+    geminiHelper = GeminiHelper(
+        context = this,
+        errorHandler = { errorMessage -> showError(errorMessage) },
+        uiCallback = { runnable -> runOnUiThread(runnable) }
+     )
+    }
+    /**
+     * Called when the Send button or keyboard send action is triggered
+     * Validates input and sends the question to GeminiHelper
+     */
     private fun onSendClicked() {
         val question = etQuestion.text?.toString()?.trim().orEmpty()
-        if (question.isBlank()) {
+        if (question.isEmpty()) {
             showToast("Please enter a question.")
             return
         }
@@ -109,19 +135,29 @@ class MainActivity : AppCompatActivity() {
         sendQuestionToGemini(question)
     }
 
+    /**
+     * Sends the user's question to GeminiHelper and handles the asynchronous response
+     * Shows loading indicator during network call and updates UI with response
+     */
     private fun sendQuestionToGemini(question: String) {
         showLoading(true)
-
         geminiHelper.sendUserMessage(question) { responseText ->
-            showLoading(false)
-            if (responseText.isBlank()) showError("No response text received.")
-            else {
-                viewModel.responseHtml.value = responseText
-                displayResponse(responseText)
+            runOnUiThread {
+                showLoading(false)
+                if (responseText.isNullOrBlank()) {
+                    showError("Empty response received.")
+                } else {
+                    // Save response HTML and display it
+                    viewModel.responseHtml.value = responseText
+                    displayResponse(responseText)
+                }
             }
         }
     }
 
+    /**
+     * Toggles loading UI state to provide feedback to user
+     */
     private fun showLoading(isLoading: Boolean) {
         progressLoading.visibility = if (isLoading) View.VISIBLE else View.GONE
         btnSend.isEnabled = !isLoading
@@ -129,6 +165,9 @@ class MainActivity : AppCompatActivity() {
         btnSavePdf.isEnabled = !isLoading
     }
 
+    /**
+     * Displays error messages consistently in the UI thread
+     */
     private fun showError(message: String) {
         runOnUiThread {
             showLoading(false)
@@ -136,18 +175,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Formats and loads Gemini's HTML response content into the WebView with custom styling
+     */
     private fun displayResponse(htmlContent: String) {
+        // Full HTML page with embedded style to ensure consistent UI and readability
         val formattedHtml = """
             <html>
             <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <meta charset="UTF-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Roboto&display=swap');
                     body {
                         font-family: 'Roboto', sans-serif;
                         padding: 16px;
                         background-color: #ffffff;
                         color: #202124;
                         line-height: 1.6;
+                        margin: 0;
                     }
                     h1, h2, h3 {
                         color: #1a73e8;
@@ -175,33 +221,49 @@ class MainActivity : AppCompatActivity() {
                     }
                 </style>
             </head>
-            <body>$htmlContent</body>
+            <body>${htmlContent.trim()}</body>
             </html>
         """.trimIndent()
 
         webViewResponse.loadDataWithBaseURL(null, formattedHtml, "text/html", "UTF-8", null)
         cardWebView.visibility = View.VISIBLE
+
+        // Scroll WebView down slightly after content loads for better UX
+        webViewResponse.postDelayed({ webViewResponse.pageDown(true) }, 300)
     }
 
+    /**
+     * Shows a friendly welcome message if no chat history exists
+     */
     private fun displayWelcomeMessage() {
-        displayResponse("<h2>Welcome to Smrtask!</h2><p>Ask me anything—I'll respond with clean, readable answers.</p>")
+        displayResponse(
+            "<h2>Welcome to Smrtask!</h2>" +
+            "<p>Ask me anything—I'll respond with clean, readable answers.</p>"
+        )
     }
 
+    /**
+     * Opens SettingsActivity for user preferences like API key and theme
+     */
     private fun openSettings() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
 
+    /**
+     * Exports current chat response as PDF using PdfHelper utility
+     * Opens the PDF if saved successfully
+     */
     private fun exportChatToPdf() {
-        val responseHtml = viewModel.responseHtml.value ?: ""
-        if (responseHtml.isBlank()) {
+        val htmlContent = viewModel.responseHtml.value
+        if (htmlContent.isNullOrBlank()) {
             showToast("No content to export.")
             return
         }
 
-        val plainText = android.text.Html.fromHtml(responseHtml, android.text.Html.FROM_HTML_MODE_LEGACY).toString()
-        val pdfPath = PdfHelper.exportToPdf(this, plainText)
+        // Convert HTML content to plain text for PDF export to keep it clean
+        val pdfPath = PdfHelper.exportToPdf(this, htmlContent)
 
-        if (pdfPath.isNotEmpty()) {
+        if (!pdfPath.isNullOrEmpty()) {
             showToast("PDF saved at $pdfPath")
             openPdf(pdfPath)
         } else {
@@ -209,22 +271,40 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Opens a PDF file using external apps with secure URI permissions
+     */
     private fun openPdf(pdfPath: String) {
-        val pdfFile = File(pdfPath)
-        val uri = FileProvider.getUriForFile(this, "${packageName}.provider", pdfFile)
-        val pdfIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/pdf")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-
         try {
-            startActivity(pdfIntent)
+            val pdfFile = File(pdfPath)
+            val pdfUri = FileProvider.getUriForFile(
+                this,
+                "$packageName.provider",
+                pdfFile
+            )
+
+            val pdfIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(pdfUri, "application/pdf")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            // Verify that there's an app to handle the intent
+            if (pdfIntent.resolveActivity(packageManager) != null) {
+                startActivity(pdfIntent)
+            } else {
+                showToast("No PDF viewer found.")
+            }
         } catch (e: Exception) {
-            showToast("No PDF viewer found.")
+            showToast("Unable to open PDF: ${e.message}")
         }
     }
 
-    private fun showToast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    /**
+     * Utility function to show a short Toast message on UI thread
+     */
+    private fun showToast(msg: String) {
+        runOnUiThread {
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
     }
 }

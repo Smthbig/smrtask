@@ -141,14 +141,7 @@ class GeminiHelper(
         }
     }
 
-    private fun safetyRule(category: String): JSONObject {
-        return JSONObject().apply {
-            put("category", category)
-            put("threshold", "BLOCK_MEDIUM_AND_ABOVE")
-        }
-    }
-
-
+    // ✅ Fixed: Removed duplicate safetyRule definition
     private fun safetyRule(category: String): JSONObject {
         return JSONObject().apply {
             put("category", category)
