@@ -69,4 +69,4 @@ You can directly install the app using the APK file.
 Want to improve it? Feel free to fork, suggest changes, or raise issues.
 
 ```bash
-git clone https://github.com/your-username/SmartTask.git
+git clone https://github.com/Smthbig/smrtask.git
